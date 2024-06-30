@@ -1,0 +1,86 @@
+{{- if eq .Values.ingressClassName "ambassador" }}
+{{- range $hostIndex, $hostConfig := .Values.ingressEndpoints }}
+{{- $hostPrefix := printf "%s-%d" (include "app.fullname" $) $hostIndex }}
+
+{{- range $ambassadorId, $ambassadorConfig := dict "internal" $hostConfig.internal "external" $hostConfig.external }}
+{{- if $ambassadorConfig.enabled }}
+{{- $namePrefix := printf "%s-%s" $hostPrefix $ambassadorId }}
+{{- $domain := required (printf "Value for ambassador.%s.domain is required" $ambassadorId) (index $.Values.ambassador $ambassadorId).domain }}
+{{- $subdomain := printf "%s-%s" ($hostConfig.subdomainPrefix | default (include "app.fullname" $)) $.Release.Namespace }}
+{{- $defaultHost := printf "%s.%s" $subdomain $domain }}
+{{- $host := $hostConfig.host | default $defaultHost }}
+
+{{- range $mappingIndex, $mapping := $ambassadorConfig.mappings }}
+{{- $scheme := required "service.scheme is required"  $.Values.service.scheme }}
+---
+apiVersion: getambassador.io/v2
+kind: Mapping
+metadata:
+  name: {{ printf "%s-%d" $namePrefix $mappingIndex }}
+  labels:
+  {{- include "app.labels" $ | nindent 4 }}
+spec:
+  ambassador_id: {{ $ambassadorId }}
+  host: {{ $host | quote }}
+  prefix: {{ $mapping.prefix | default '/' | quote }}
+  {{- if $mapping.rewrite }}
+  rewrite: {{ $mapping.rewrite | quote }}
+  {{- end }}
+  service: {{ printf "%s://%s:%s" $scheme (include "app.fullname" $) ( $.Values.service.port | toString ) | quote }}
+  weight: {{ coalesce $mapping.weight $.Values.ambassador.traffic.weight 100 }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{- /*----- TLS Configuration -----*/}}
+{{- if .Values.ambassadorSecrets }}
+{{- range $hostIndex, $hostConfig := .Values.ambassadorSecrets }}
+{{- if $hostConfig.host }}
+{{- $secretName := printf "%s-tls" $hostConfig.host | replace "." "-" }}
+
+{{- /*----- TLS Secret for Host (1/host) -----*/}}
+{{- if $hostConfig.tls }}
+{{- with $hostConfig.tls }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $secretName }}
+type: kubernetes.io/tls
+data:
+  tls.crt: {{ .crt | b64enc }}
+  tls.key: {{ .key | b64enc }}
+  {{- if .ca }}
+  ca.crt: {{ .ca | b64enc }}
+  {{- end }}
+{{- end }}
+{{- end }}
+
+{{- range $ambassadorId, $ambassadorIdEnabled := dict "internal" $hostConfig.internal "external" $hostConfig.external }}
+{{- if $ambassadorIdEnabled }}
+{{- $name := printf "%s-%s" $hostConfig.host $ambassadorId }}
+
+{{- /*----- TLSContexts for Host (1/ambassadorId) -----*/}}
+{{- if $hostConfig.tls }}
+---
+apiVersion: getambassador.io/v2
+kind: Host
+metadata:
+  name: {{ $name }}-host
+spec:
+  ambassador_id: {{ $ambassadorId }}
+  hostname: {{ $hostConfig.host | quote }}
+  acmeProvider:
+    authority: none
+  tlsSecret:
+    name: {{ $secretName }}
+  tls:
+    min_tls_version: v1.2
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

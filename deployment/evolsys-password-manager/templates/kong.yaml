@@ -1,0 +1,100 @@
+{{- $ingressClassName := .Values.ingressClassName }}
+{{- $dedicatedWAFpolicy := .Values.dedicatedWAFpolicy }}
+{{- if eq $ingressClassName "kong" }}
+{{- range $hostIndex, $hostConfig := .Values.ingressEndpoints }}
+{{- $hostPrefix := printf "%s-%d" (include "app.fullname" $) $hostIndex }}
+
+{{- range $ingressId, $ingressConfig := dict "internal" $hostConfig.internal "external" $hostConfig.external }}
+{{- if ($ingressConfig | default dict).enabled }}
+{{- $namePrefix := printf "%s-%s" $hostPrefix $ingressId }}
+{{- $domain := required (printf "Value for %s.%s.domain is required" $ingressClassName $ingressId) (index $.Values $ingressClassName $ingressId).domain }}
+{{- $subdomain := printf "%s-%s" ($hostConfig.subdomainPrefix | default (include "app.fullname" $)) $.Release.Namespace }}
+{{- $defaultHost := printf "%s.%s" $subdomain $domain }}
+{{- $host := $hostConfig.host | default $defaultHost }}
+
+{{- /*----- Determine if TLS is configured and get values -----*/}}
+{{- $tlsHostConfig := false }}
+{{- $secretName := "" }}
+{{- range $hostIndex, $hostConfig := $.Values.ingressSecrets }}
+{{- if and (hasKey $hostConfig "tls") (eq ($hostConfig.host | default "") $host) ((index $hostConfig $ingressId) | default false) }}
+{{- $tlsHostConfig = $hostConfig }}
+{{- $secretName = (printf "%s-tls" $tlsHostConfig.host | replace "." "-") }}
+{{- end }}
+{{- end }}
+
+{{- /*----- Ingress -----*/}}
+{{- $mappingsDefault := append (list) (dict "prefix" "/" "rewrite" "/") }}
+{{- range $mappingIndex, $mapping := ($ingressConfig.mappings | default $mappingsDefault) }}
+{{- $setRewrite := (not (and (eq ($mapping.prefix | default "/") "/") (eq ($mapping.rewrite | default "/") "/"))) }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ printf "%s-%d" $namePrefix $mappingIndex }}
+  labels:
+  {{- include "app.labels" $ | nindent 4 }}
+  annotations:
+    konghq.com/protocols: "https"
+    konghq.com/https-redirect-status-code: "308"
+    vmware-alb/dedicated_waf_policy: {{ $dedicatedWAFpolicy | quote }}
+    {{- if $setRewrite }}
+    konghq.com/plugins: {{ printf "%s-%d-transformer" $namePrefix $mappingIndex }}
+    {{- end }}
+spec:
+  ingressClassName: {{ printf "%s-%s" $ingressClassName $ingressId }}
+  tls:
+  - hosts:
+    - {{ $host | quote }}
+    {{- if $tlsHostConfig }}
+    secretName: {{ $secretName }}
+    {{- end }}
+  rules:
+  - host: {{ $host | quote }}
+    http:
+      paths:
+      - path: {{ $mapping.prefix | default "/" }}{{- if $setRewrite }}(?<path>(\S+)?){{- end }}
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ (include "app.fullname" $) }}
+            port:
+              number: {{ $.Values.service.port }}
+
+{{- /*----- Kong Rewrite -----*/}}
+{{- if $setRewrite }}
+---
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  annotations:
+    kubernetes.io/ingress.class: {{ printf "%s-%s" $ingressClassName $ingressId }}
+  name: {{ printf "%s-%d-transformer" $namePrefix $mappingIndex }}
+config:
+  replace:
+    uri: {{ $mapping.rewrite }}$(uri_captures.path)
+plugin: request-transformer-advanced
+{{- end }}
+
+{{- /*----- TLS Secret -----*/}}
+{{- if $tlsHostConfig }}
+{{- with $tlsHostConfig.tls }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $secretName }}
+type: kubernetes.io/tls
+data:
+  tls.crt: {{ .crt | b64enc }}
+  tls.key: {{ .key | b64enc }}
+  {{- if .ca }}
+  ca.crt: {{ .ca | b64enc }}
+  {{- end }}
+{{- end }}
+{{- end }}
+
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

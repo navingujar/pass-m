@@ -1,0 +1,15 @@
+{{- if .Values.env_vars }}
+{{- range $configmaps := .Values.env_vars }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ printf "%s-%s" (include "app.fullname" $) ( $configmaps.name ) | quote }}
+  labels:
+    {{- include "app.labels" $ | nindent 4 }}
+data: 
+{{- range $key, $val := $configmaps.configs }}
+{{ $key | quote | indent 4}}: {{ $val | quote }}
+{{- end }}
+{{- end }}
+{{- end }}

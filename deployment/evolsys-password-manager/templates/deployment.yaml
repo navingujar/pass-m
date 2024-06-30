@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "app.fullname" . }}
+  labels:
+{{ include "app.labels" . | indent 4 }}
+  annotations:
+{{ include "app.annotation" . | indent 4 }}
+    collectord.io/index: abcd-{{ .Values.app.code }}
+    collectord.io/logs-type: "ngnix_error"
+    collectord.io/logs-extraction: '^(?P<timestamp>[^\]\[.]+) .+$'
+    collectord.io/logs-timestampfield: timestamp
+    collectord.io/logs-timestampformat: '2019/07/07 03:44:50'
+    collectord.io/logs-eventpattern: '(?<!\d)\d{4}\/\d{2}\/\d{2}(?!\d)'
+    collectord.io/logs-override.1-match: '^(\d{1,3}\.){3}\d{1,3}'
+    collectord.io/logs-override.1-source: '/var/log/dev-gatsby/access.log'
+    collectord.io/logs-override.1-type: 'access_extn'
+    collectord.io/logs-override.1-index: abcd-{{ .Values.app.code }}
+spec:
+  {{- if .Values.replicaCount }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+{{ include "app.match-labels" . | indent 6 }}
+  template:
+    metadata:
+      labels:
+        checksum/config: {{ .Values.build.number | quote }}
+{{ include "app.match-labels" . | indent 8 }}
+    spec:
+      {{- if .Values.ondemand.enabled }}
+      nodeSelector:
+        ondemand: "true"
+      tolerations:
+      - effect: NoExecute
+        key: ondemand
+        operator: Equal
+        value: "true"
+      {{- end }}
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        envFrom:
+        {{- if .Values.env_vars }}
+          - configMapRef:
+              name: {{ include "app.fullname" . }}-primary
+        {{- end }}
+        ports:
+        - name: {{ required "service.connectionName is required"  .Values.service.connectionName }}
+          containerPort: {{ required "service.port is required"  .Values.service.port }}
+          protocol: {{ required "service.protocol is required"   .Values.service.protocol | upper }}
+        livenessProbe:
+        {{- with .Values.livenessProbe }}
+{{ toYaml . | indent 10 }}
+        {{- end }}
+        readinessProbe:
+        {{- with .Values.readinessProbe }}
+{{ toYaml . | indent 10 }}
+        {{- end }}
+        resources:
+{{ toYaml .Values.resources | indent 10 }}
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: {{ include "app.name" . }}
+                topologyKey: kubernetes.io/hostname
+              weight: 100
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}

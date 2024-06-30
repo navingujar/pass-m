@@ -1,0 +1,87 @@
+global:
+  app: 'springboot'
+
+# If you are using Horizontal POD Auto Scaler, you must disable ReplicaCount
+replicaCount: 1
+
+# hpa:
+#   min: 1
+#   max: 2
+#   cpu: 70
+
+# env_vars:
+# - name: "primary"
+#   configs:
+#       INSTANCE: "primary"
+#       DB_HOST: "primary.db.host"
+#       AWS_ENDPOINT: "https://dummy.com"
+# - name: "dr"
+#   configs:
+#       INSTANCE: "dr"
+#       DB_HOST: "dr.db.host"
+#       AWS_ENDPOINT: "https://dummy.com/"
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 200m
+    memory: 128Mi
+#######################################################################################################
+############################ - Be sure you know what you change below - ###############################
+
+build:
+  number: 'build-number'
+  uri: 'build-uri'
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+nameOverride: ""
+fullnameOverride: ""
+app:
+  code: dev
+  version: initial
+
+image:
+  tag: "redhat-openjdk-18/openjdk18-openshift"
+  pullPolicy: Always
+
+ingressClassName: kong
+dedicatedWAFpolicy: false
+
+service:
+  connectionName: springboot
+  type: ClusterIP
+  port: 8080
+  protocol: TCP
+  scheme: http
+
+livenessProbe:
+  httpGet:
+    path: /
+    port: springboot
+  initialDelaySeconds: 20
+  periodSeconds: 10
+  successThreshold: 1
+  timeoutSeconds: 1
+
+readinessProbe:
+  httpGet:
+    path: /
+    port: springboot
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  successThreshold: 1
+  timeoutSeconds: 1
+
+
+## Flag to deploy workload on ondemand nodes
+ondemand:
+  enabled: false
+############################ - Be sure you know what you change above - ###############################
+#######################################################################################################
