@@ -1,3 +1,18 @@
+
+/**
+ * EvolSys IT Consulting (2024)
+ * Project: Password Manager
+ * Author: IT-Dev@evolsys
+ * Date: 2024-06-30
+ * Version: 0.1.08
+ * Status: In Build
+ * The PasswordManager class is a GUI-based password manager application.
+ * It allows users to add and retrieve passwords for different accounts.
+ * Password requirements: 8-20 characters, at least one uppercase, 
+ * one lowercase letter, one digit/special character.
+ */
+
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
@@ -6,18 +21,26 @@ import java.io.*;
 import java.util.HashMap;
 import java.util.Scanner;
 
+
 public class PasswordManager extends JFrame {
-    private static final String FILE_NAME = "passwords.txt";
     private HashMap<String, String> passwordMap;
     private JTextField accountField;
     private JPasswordField passwordField;
     private JTextArea displayArea;
 
+    /**
+     * Constructs a PasswordManager object.
+     * Initializes the passwordMap and loads existing passwords from the file.
+     */
     public PasswordManager() {
         passwordMap = new HashMap<>();
         loadPasswords();
     }
 
+    /**
+     * Loads existing passwords from the file and populates the passwordMap.
+     * If no existing password file is found, a new one will be created.
+     */
     private void loadPasswords() {
         try (BufferedReader br = new BufferedReader(new FileReader(FILE_NAME))) {
             String line;
@@ -32,6 +55,9 @@ public class PasswordManager extends JFrame {
         }
     }
 
+    /**
+     * Saves the passwords in the passwordMap to the file.
+     */
     private void savePasswords() {
         try (BufferedWriter bw = new BufferedWriter(new FileWriter(FILE_NAME))) {
             for (String account : passwordMap.keySet()) {
@@ -43,15 +69,30 @@ public class PasswordManager extends JFrame {
         }
     }
 
+    /**
+     * Adds a new password to the passwordMap and saves it to the file.
+     * 
+     * @param account  the account name
+     * @param password the password
+     */
     public void addPassword(String account, String password) {
         passwordMap.put(account, password);
         savePasswords();
     }
 
+    /**
+     * Retrieves the password for the specified account from the passwordMap.
+     * 
+     * @param account the account name
+     * @return the password for the account, or null if not found
+     */
     public String getPassword(String account) {
         return passwordMap.get(account);
     }
 
+    /**
+     * Sets up the GUI components and event listeners.
+     */
     private void setupGUI() {
         setTitle("Password Manager");
         setSize(400, 300);
@@ -93,6 +134,10 @@ public class PasswordManager extends JFrame {
         add(scrollPane, BorderLayout.CENTER);
     }
 
+    /**
+     * Adds a password from the GUI input fields to the passwordMap.
+     * Displays a success message or an error message if the input is invalid.
+     */
     private void addPasswordFromGUI() {
         String account = accountField.getText();
         String password = new String(passwordField.getPassword());
@@ -106,6 +151,10 @@ public class PasswordManager extends JFrame {
         }
     }
 
+    /**
+     * Retrieves a password from the passwordMap based on the account entered in the GUI.
+     * Displays the password or an error message if the account is not found.
+     */
     private void retrievePasswordFromGUI() {
         String account = accountField.getText();
         if (!account.isEmpty()) {
@@ -121,6 +170,10 @@ public class PasswordManager extends JFrame {
         }
     }
 
+    /**
+     * Runs the console-based version of the password manager.
+     * Allows users to add and retrieve passwords using the command line.
+     */
     private void runConsole() {
         Scanner scanner = new Scanner(System.in);
 
@@ -161,6 +214,12 @@ public class PasswordManager extends JFrame {
         }
     }
 
+    /**
+     * The main method of the PasswordManager application.
+     * Creates an instance of PasswordManager and either runs the GUI or console version based on the command line argument.
+     * 
+     * @param args the command line arguments
+     */
     public static void main(String[] args) {
         PasswordManager pm = new PasswordManager();
         if (args.length > 0 && args[0].equals("console")) {
